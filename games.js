@@ -188,6 +188,7 @@
     session.on(document,'visibilitychange',()=>{if(document.hidden){held.left=false;held.right=false;}});
     session.on(start,'click',()=>{
       if(running||!session.live)return;
+      window.MamaAudio?.unlock();window.MamaAudio?.sfx('start');
       running=true;intro.hidden=true;canvas.focus({preventScroll:true});spawn();
       session.animate(dt=>{
         elapsed+=dt;
@@ -197,8 +198,8 @@
           boy.y+=(124+caught*12)*(H-104)/226*dt;boy.x+=boy.vx*dt;
           if(boy.x<25||boy.x>305){boy.x=Math.max(25,Math.min(305,boy.x));boy.vx*=-1;}
           if(boy.y>=H-76){
-            if(Math.abs(boy.x-momX)<=34){caught++;toast=caught===5?'Пойман!':'Есть!';}
-            else{misses++;toast='Ещё попытка';}
+            if(Math.abs(boy.x-momX)<=34){caught++;toast=caught===5?'Пойман!':'Есть!';window.MamaAudio?.sfx('catch');}
+            else{misses++;toast='Ещё попытка';window.MamaAudio?.sfx('miss');}
             boy=null;session.setStatus(`${caught} / 5 поймано`);
             if(caught===5){draw();session.complete('5 из 5. Поймала!',{caught,misses,seconds:Math.round(elapsed)});return;}
             wait=.35;
@@ -222,6 +223,7 @@
   function stop() {
     if (active) active.destroy();
     active = null;
+    window.MamaAudio?.stopEffects();
   }
 
   function start(type, options = {}) {

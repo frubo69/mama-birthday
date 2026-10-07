@@ -82,6 +82,7 @@
       if (strokeHits >= 3) {
         score += strokeHits; combos++;
         comboText = `Комбо ×${strokeHits} · +${strokeHits}`; comboLife = .85;
+        if (running && session.live) window.MamaAudio?.sfx('combo', { count: strokeHits });
         report();
       }
       strokeHits = 0; strokeStarted = null;
@@ -104,6 +105,7 @@
       note.textContent = session.instruction.textContent;
       session.on(start, 'click', () => {
         if (running || !session.live) return;
+        window.MamaAudio?.unlock(); window.MamaAudio?.sfx('start');
         running = true; intro.hidden = true; fallback.hidden = false;
         fallback.focus({ preventScroll: true }); report();
         session.animate(dt => {
@@ -116,6 +118,7 @@
       });
       session.on(fallback, 'click', () => {
         if (!running || !session.live || finished) return;
+        window.MamaAudio?.sfx('slice');
         hits++; score++; report();
         fallback.textContent = WORDS[hits % WORDS.length].join(' ');
       });
@@ -264,6 +267,7 @@
         } else survivors.push(bubble);
       });
       if (survivors.length !== bubbles.length) {
+        window.MamaAudio?.sfx('slice');
         bubbles = survivors; report();
       }
       draw();
@@ -297,6 +301,7 @@
       for (const sample of samples) {
         const next = point(sample); if (!next || !last) continue;
         if (!dragging && Math.hypot(next.x - origin.x, next.y - origin.y) <= 5) continue;
+        if (!dragging) window.MamaAudio?.sfx('swipe');
         dragging = true;
         if (strokeStarted === null) strokeStarted = elapsed;
         strokeLastAt = elapsed;
@@ -325,6 +330,7 @@
 
     session.on(start, 'click', () => {
       if (running || !session.live || finished) return;
+      window.MamaAudio?.unlock(); window.MamaAudio?.sfx('start');
       resize(); running = true; intro.hidden = true; canvas.focus({ preventScroll: true }); report(); draw();
       session.animate(dt => {
         if (!running || !session.live) return;

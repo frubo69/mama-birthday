@@ -305,6 +305,7 @@
       if (!fits(item, row, col)) return false;
       item.position = { row, col };
       moves++;
+      window.MamaAudio?.sfx('drop');
       render(item);
       checkWin();
       return true;
@@ -313,6 +314,7 @@
       if (!session.live || !started || complete) return;
       item.position = null;
       moves++;
+      window.MamaAudio?.sfx('return');
       render(item);
       status();
     }
@@ -358,6 +360,7 @@
     }
     function beginDrag(item, event) {
       if (!session.live || !started || complete || event.isPrimary === false || (event.button !== undefined && event.button !== 0)) return;
+      window.MamaAudio?.unlock(); window.MamaAudio?.sfx('pickup');
       resetDrag();
       select(item);
       item.button.focus({ preventScroll: true });
@@ -390,7 +393,7 @@
       if (!moving) { select(item); return; }
       else if (candidate && candidate.valid) place(item, candidate.row, candidate.col);
       else if (inTray) returnToTray(item);
-      else { invalidDrops++; status('здесь не помещается'); }
+      else { invalidDrops++; window.MamaAudio?.sfx('return'); status('здесь не помещается'); }
       if (session.live && !complete) item.button.focus({ preventScroll: true });
     }
     function key(item, event) {
@@ -399,6 +402,7 @@
       if (!arrows[event.key] && !['Enter', ' ', 'Delete', 'Backspace', 'Escape'].includes(event.key)) return;
       event.preventDefault();
       event.stopPropagation();
+      window.MamaAudio?.unlock();
       select(item);
       if (event.key === 'Escape') { resetDrag(); return; }
       if (drag) resetDrag();
@@ -408,10 +412,10 @@
         for (let row = 0; row < 4; row++) for (let col = 0; col < 4; col++) {
           if (fits(item, row, col)) { place(item, row, col); if (session.live) item.button.focus({ preventScroll: true }); return; }
         }
-        status('освободи место для этой вещи');
+        window.MamaAudio?.sfx('return'); status('освободи место для этой вещи');
       } else {
         const direction = arrows[event.key];
-        if (!place(item, item.position.row + direction[0], item.position.col + direction[1])) status('здесь не помещается');
+        if (!place(item, item.position.row + direction[0], item.position.col + direction[1])) { window.MamaAudio?.sfx('return'); status('здесь не помещается'); }
         if (session.live) item.button.focus({ preventScroll: true });
       }
     }
@@ -428,6 +432,7 @@
     });
     session.on(reset, 'click', () => {
       if (!session.live || !started || complete) return;
+      window.MamaAudio?.sfx('return');
       resetDrag();
       selected = null;
       moves = 0;
@@ -440,6 +445,7 @@
     session.on(document, 'visibilitychange', () => { if (document.hidden) resetDrag(); });
     session.on(introStart, 'click', () => {
       if (!session.live || started || complete) return;
+      window.MamaAudio?.unlock(); window.MamaAudio?.sfx('start');
       started = true;
       root.inert = false;
       root.removeAttribute('aria-hidden');
