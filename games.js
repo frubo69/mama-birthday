@@ -155,7 +155,7 @@
     function fallback(x,y,size,mom) {
       const u=size/12;
       const block=(a,b,w,h,color)=>{ctx.fillStyle=color;ctx.fillRect(Math.round(x+a*u),Math.round(y+b*u),Math.ceil(w*u),Math.ceil(h*u));};
-      block(3,0,6,4,'#493732');block(4,2,4,4,'#efbe99');block(4,3,1,1,'#283449');block(7,3,1,1,'#283449');
+      block(3,0,6,4,'#d9bd7d');block(4,2,4,4,'#efbe99');block(4,3,1,1,'#283449');block(7,3,1,1,'#283449');
       block(3,6,6,4,mom?'#e7bda6':'#87b7da');block(0,5,3,2,'#efbe99');block(9,5,3,2,'#efbe99');block(3,10,2,2,'#dce4ed');block(7,10,2,2,'#dce4ed');
     }
     function sprite(name,x,y,size) {
@@ -174,7 +174,7 @@
       ctx.textAlign='center';ctx.fillStyle='#ffebc7';
       if(running&&toast){ctx.font='bold 20px -apple-system,sans-serif';ctx.fillText(toast,165,H*.42);}
     }
-    ['mom','son'].forEach(name=>{const p=new Image();pictures[name]=p;session.on(p,'load',()=>{if(session.live)draw();});session.on(p,'error',()=>{if(session.live)draw();});p.src=`assets/${name}.webp`;});
+    ['mom','son'].forEach(name=>{const p=new Image();pictures[name]=p;session.on(p,'load',()=>{if(session.live)draw();});session.on(p,'error',()=>{if(session.live)draw();});p.src=`assets/${name}.webp?v=20261008-3`;});
     function follow(event) { const b=canvas.getBoundingClientRect();if(b.width)chooseX((event.clientX-b.left)*330/b.width); }
     session.on(canvas,'pointerdown',event=>{
       if(!running||!session.live||!event.isPrimary)return;

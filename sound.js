@@ -6,13 +6,31 @@
   const MAX_VOICES = 40, MAX_PENDING = 8;
   const limits = { start: 250, catch: 120, miss: 250, swipe: 150, slice: 80, combo: 180, pickup: 90, drop: 100, return: 160, complete: 500 };
   let enabled = true, ambient = false, interacted = false;
-  let audio = null, master = null, resumePending = null;
+  let audio = null, master = null, resumePending = null, resumeAttempt = 0, warmup = null;
   let scene = 0, musicMode = null, victoryDone = false, phrase = 0, epoch = 0;
   let loopTimer = null, victoryTimer = null, pendingEffects = [];
   const voices = new Set(), rates = new Map(), subscribers = new Set();
   const now = () => typeof performance !== 'undefined' ? performance.now() : Date.now();
-  const state = () => ({ enabled, ambient, unlocked: interacted, playing: musicMode, available: Boolean(window.AudioContext || window.webkitAudioContext) });
+  const state = () => ({ enabled, ambient, unlocked: Boolean(audio && audio.state === 'running'), ready: Boolean(enabled && audio && audio.state === 'running' && !document.hidden), playing: musicMode, available: Boolean(window.AudioContext || window.webkitAudioContext) });
   function notify() { subscribers.forEach(fn => { try { fn(state()); } catch (_) {} }); }
+  function audioSession(type) {
+    try { if (typeof navigator !== 'undefined' && navigator.audioSession) navigator.audioSession.type = type; } catch (_) {}
+  }
+  function clearWarmup() {
+    if (!warmup) return;
+    warmup.onended = null;
+    try { warmup.stop(); } catch (_) {}
+    warmup.disconnect(); warmup = null;
+  }
+  function primeOutput() {
+    // Start a real source in the same gesture stack, including on older Safari.
+    clearWarmup();
+    const source = audio.createBufferSource();
+    source.buffer = audio.createBuffer(1, 1, audio.sampleRate);
+    source.connect(master); warmup = source;
+    source.onended = () => { source.disconnect(); if (warmup === source) warmup = null; };
+    source.start(0);
+  }
 
   function retire(voice, stop = false) {
     if (!voices.has(voice)) return;
@@ -34,7 +52,7 @@
     voices.forEach(voice => { if (voice.category === 'music') retire(voice, true); });
   }
   function stopAll() {
-    epoch++; stopMusic(); stopEffects();
+    epoch++; stopMusic(); stopEffects(); clearWarmup();
   }
 
   function tone(frequency, duration = .12, delay = 0, volume = .016, type = 'triangle', endFrequency = null, category = 'effect') {
@@ -137,29 +155,49 @@
     try {
       const Audio = window.AudioContext || window.webkitAudioContext;
       if (!Audio) return Promise.resolve(false);
+      audioSession('playback');
       if (!audio) {
         audio = new Audio(); master = audio.createGain();
-        master.gain.value = .65; master.connect(audio.destination);
+        master.gain.value = 2; master.connect(audio.destination);
+        audio.onstatechange = () => {
+          if (audio.state === 'interrupted') stopAll();
+          notify();
+        };
       }
-      if (audio.state === 'running') { syncMusic(); return Promise.resolve(true); }
-      if (resumePending) return resumePending;
-      // This call happens immediately in the pointer/click/keyboard handler.
+      if (audio.state === 'running') { syncMusic(); notify(); return Promise.resolve(true); }
+      // A touch pointerdown may leave resume() pending forever. A later release
+      // or click MUST retry synchronously, even while that old promise exists.
+      const attempt = ++resumeAttempt;
       const resume = audio.resume();
-      resumePending = Promise.resolve(resume).then(() => {
-        resumePending = null;
-        if (!enabled || document.hidden || audio.state !== 'running') { pendingEffects = []; return false; }
-        syncMusic();
-        const queued = pendingEffects; pendingEffects = [];
-        queued.forEach(event => { if (event.epoch === epoch && now() - event.time < 350) playEffect(event.kind, event.detail); });
-        notify(); return true;
-      }).catch(() => { resumePending = null; pendingEffects = []; return false; });
+      primeOutput();
+      resumePending = new Promise(resolve => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true; clearTimeout(deadline);
+          const ready = enabled && !document.hidden && audio.state === 'running';
+          // An earlier rejected/pending attempt must not erase the newer one.
+          if (attempt === resumeAttempt) {
+            resumePending = null;
+            if (ready) {
+              syncMusic();
+              const queued = pendingEffects; pendingEffects = [];
+              queued.forEach(event => { if (event.epoch === epoch && now() - event.time < 350) playEffect(event.kind, event.detail); });
+            } else pendingEffects = [];
+            notify();
+          }
+          resolve(ready);
+        };
+        const deadline = setTimeout(finish, 1500);
+        Promise.resolve(resume).then(finish, finish);
+      });
       return resumePending;
     } catch (_) { resumePending = null; pendingEffects = []; return Promise.resolve(false); }
   }
 
   function setEnabled(value) {
     enabled = Boolean(value);
-    if (!enabled) stopAll(); else syncMusic();
+    if (!enabled) { stopAll(); audioSession('auto'); } else syncMusic();
     notify(); return enabled;
   }
   function setAmbient(value) {
@@ -175,16 +213,25 @@
   }
 
   // A single set of page-lifetime listeners also covers touch-generated clicks.
-  document.addEventListener('pointerdown', unlock, { capture: true, passive: true });
-  document.addEventListener('click', unlock, { capture: true, passive: true });
-  document.addEventListener('keydown', event => { if (!event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey) unlock(); }, { capture: true });
+  function gestureUnlock(event) {
+    // The sound button owns its toggle; auto-unlocking it in capture would make
+    // its click handler immediately mute the context it had just enabled.
+    if (event?.target?.closest?.('#sound')) return;
+    unlock();
+  }
+  document.addEventListener('pointerdown', event => { if (event.pointerType === 'mouse') gestureUnlock(event); }, { capture: true, passive: true });
+  document.addEventListener('pointerup', gestureUnlock, { capture: true, passive: true });
+  document.addEventListener('touchend', gestureUnlock, { capture: true, passive: true });
+  document.addEventListener('click', gestureUnlock, { capture: true, passive: true });
+  document.addEventListener('keydown', event => { if (!event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey) gestureUnlock(event); }, { capture: true });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       stopAll();
+      audioSession('auto');
       if (audio) audio.suspend().catch(() => {});
     } else if (interacted && enabled) unlock();
   });
-  window.addEventListener('pagehide', () => { stopAll(); if (audio) audio.suspend().catch(() => {}); });
+  window.addEventListener('pagehide', () => { stopAll(); audioSession('auto'); if (audio) audio.suspend().catch(() => {}); });
   window.addEventListener('pageshow', () => { if (interacted && enabled && !document.hidden) unlock(); });
 
   window.MamaAudio = Object.freeze({ unlock, sfx, setEnabled, setAmbient, setScreen, stopEffects, subscribe, get enabled() { return enabled; }, get state() { return state(); } });

@@ -59,21 +59,24 @@ function show(screen){
     }
   });
 }
-$('#next').addEventListener('click',()=>{window.MamaAudio?.unlock();show(current+1);});
+$('#next').addEventListener('click',()=>{window.MamaAudio?.unlock();show(current+1);if(current!==4)window.MamaAudio?.sfx('start');});
 $('#replay').addEventListener('click',()=>{window.MamaAudio?.unlock();completed.clear();show(1);});
 $$('[data-level]').forEach(button=>button.addEventListener('click',()=>{window.MamaAudio?.unlock();show(Number(button.dataset.level));}));
 // The shared engine controls effects, optional ambient music, and the finale.
 const audioEngine=window.MamaAudio;
 function soundUI(state){
-  const enabled=Boolean(state&&state.enabled);
-  $('#sound').setAttribute('aria-pressed',String(enabled));
-  $('#sound').setAttribute('aria-label',enabled?'Выключить звук':'Включить звук');
+  const ready=Boolean(state&&state.ready);
+  $('#sound').setAttribute('aria-pressed',String(ready));
+  $('#sound').setAttribute('aria-label',ready?'Выключить звук':'Включить звук');
 }
 if(audioEngine)audioEngine.subscribe(soundUI);else soundUI(null);
 $('#sound').addEventListener('click',()=>{
   if(!audioEngine){announcement('Звук недоступен. На игры это не влияет.');return;}
-  const enabled=audioEngine.setEnabled(!audioEngine.enabled);
-  if(enabled)audioEngine.unlock().then(ok=>{if(!ok&&audioEngine.enabled)announcement('Звук не включился. На игры это не влияет.');});
+  if(audioEngine.state.ready){audioEngine.setEnabled(false);return;}
+  audioEngine.setEnabled(true);
+  const ready=audioEngine.unlock();
+  audioEngine.sfx('start');
+  ready.then(ok=>{if(!ok&&audioEngine.enabled)announcement('Звук не запустился. Нажми на динамик ещё раз.');});
 });
 show(0);
 })();
